@@ -36,12 +36,13 @@ const generateOTP = () => {
 
 //OTP generator API
 app.post('/otp-generate', (req, res) => {
-    const { mobileNumber } = req.body;
+    const { phoneNumber } = req.body;
+    console.log(phoneNumber)
     const phoneNumberPattern = /^\d{10}$/;
-    if (!mobileNumber) {
+    if (!phoneNumber) {
         return res.status(400).send({ success: false, message: 'Mobile number is required' });
     }
-    if(!phoneNumberPattern.test(mobileNumber)){
+    if(!phoneNumberPattern.test(phoneNumber)){
         return res.status(400).send({ success: false, message: 'Enter a valid mobile number' });
 
     }
