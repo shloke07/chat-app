@@ -70,7 +70,9 @@ server.on('upgrade', function upgrade(request, socket, head) {
         const roomName = pathname.split('/')[2];
 
         wss.handleUpgrade(request, socket, head, function done(ws) {
-            ws.username = username; // Attach username to WebSocket object
+            // ws.username = username; // Attach username to WebSocket object
+            let username = 'User' + Date.now() + Math.floor(Math.random() * 1000);
+            ws.username = username
             ws.room = roomName; // Attach room name to WebSocket object
 
             if (!rooms[roomName]) {

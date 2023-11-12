@@ -27,7 +27,7 @@
 
         document.getElementById('joinRoom').addEventListener('click', function() {
             const roomName = document.getElementById('room').value;
-            socket = new WebSocket('ws://localhost:8080/chatroom/' + roomName);
+            socket = new WebSocket('ws://localhost:3000/chatroom/' + roomName);
 
             socket.onopen = function(e) {
                 console.log("Connected to room: " + roomName);
