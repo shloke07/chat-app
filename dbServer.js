@@ -54,11 +54,11 @@ setInterval(() => {
             };
         });
         // Check if the hosts object has changed
-        if (JSON.stringify(hosts) !== JSON.stringify(updatedHosts)) {
+        // if (JSON.stringify(hosts) !== JSON.stringify(updatedHosts)) {
             hosts = updatedHosts;
             io.emit('updateHosts', hosts);
             console.log('Hosts updated:', hosts);
-        }
+        // }
     });
 }, 5000);
 
