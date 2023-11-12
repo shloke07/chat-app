@@ -3,21 +3,21 @@ const bodyParser = require('body-parser');
 const mysql = require('mysql');
 const http = require('http');
 const { Server } = require('socket.io');
-const MySQLEvents = require('mysql-events');
+const WebSocket = require('ws');
+const url = require('url');
+
+const wss = new WebSocket.Server({ noServer: true });
+const rooms = {}; // Format: { roomName: { client1: username1, client2: username2, ... }, ... }
+
+const server = http.createServer();
 
 const app = express();
 app.use(bodyParser.json());
-const server = http.createServer(app);
 const io = new Server(server);
 
-
-// app.get('/', (req, res) => {
-//     res.sendFile(__dirname + '/public/index.html');
-// });
-
-
-
-
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/public/index.html');
+});
 
 require("dotenv").config()
 const DB_HOST = process.env.DB_HOST
@@ -37,105 +37,78 @@ const db = mysql.createPool({
 
 let hosts = {};
 
-
-const dsn = {
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD
-};
-
-
-db.query('SELECT * FROM conference WHERE endTime = 0', (error, results) => {
-    if (error) throw error;
-    results.forEach(row => {
-        hosts[row.roomId] = {
-            id: row.hostId,
-            startTime: row.startTime,
-            endTime: row.endTime
-        };
+// Timer to refresh database values every 5 seconds
+setInterval(() => {
+    db.query('SELECT * FROM conference WHERE endTime is null', (error, results) => {
+        if (error) {
+            console.error('Error fetching data: ', error);
+            return;
+        }
+        // Update hosts object
+        let updatedHosts = {};
+        results.forEach(row => {
+            updatedHosts[row.roomId] = {
+                id: row.hostId,
+                startTime: row.startTime,
+                endTime: row.endTime
+            };
+        });
+        // Check if the hosts object has changed
+        if (JSON.stringify(hosts) !== JSON.stringify(updatedHosts)) {
+            hosts = updatedHosts;
+            io.emit('updateHosts', hosts);
+            console.log('Hosts updated:', hosts);
+        }
     });
+}, 5000);
+
+server.on('upgrade', function upgrade(request, socket, head) {
+    const pathname = url.parse(request.url).pathname;
+
+    // Handle WebSocket upgrade
+    if (pathname.startsWith('/chatroom/')) {
+        const roomName = pathname.split('/')[2];
+
+        wss.handleUpgrade(request, socket, head, function done(ws) {
+            ws.username = username; // Attach username to WebSocket object
+            ws.room = roomName; // Attach room name to WebSocket object
+
+            if (!rooms[roomName]) {
+                rooms[roomName] = new Map();
+            }
+            rooms[roomName].set(ws, username);
+
+            wss.emit('connection', ws, request);
+        });
+    } else {
+        socket.destroy();
+    }
 });
 
-const mysqlEventWatcher = MySQLEvents(dsn);
-const watcher = mysqlEventWatcher.add(
-    'u373538896_gdlive.conference.endTime',
-    function (oldRow, newRow, event) {
-        // Host goes offline
-        if (newRow !== null && newRow.fields.endTime !== 0) {
-            const roomId = newRow.fields.roomId;
-            delete hosts[roomId];
-            io.emit('updateHosts', hosts);
+wss.on('connection', function connection(ws) {
+    console.log(`${ws.username} joined room: ${ws.room}`);
+
+    ws.on('message', function incoming(message) {
+        // Broadcast message to all clients in the same room
+        const room = ws.room;
+        if (rooms[room]) {
+            rooms[room].forEach((username, client) => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(`${ws.username}: ${message}`);
+                }
+            });
         }
-        // New Host comes online
-        if (oldRow === null) {
-            hosts[newRow.fields.roomId] = {
-                id: newRow.fields.hostId,
-                startTime: newRow.fields.startTime,
-                endTime: newRow.fields.endTime
-            };
-            io.emit('updateHosts', hosts);
+    });
+
+    ws.on('close', function close() {
+        if (ws.room && rooms[ws.room]) {
+            rooms[ws.room].delete(ws);
+            console.log(`${ws.username} left room: ${ws.room}`);
         }
-    },
-    'active'
-);
-
-
-db.getConnection((err, connection) => {
-    if (err) throw (err);
-    console.log("DB connected successful: " + connection.threadId)
-})
-
-
-
-
-io.on('connection', (socket) => {
-    console.log('a user has connected:', socket.id);
-
-    // Update client with currently available hosts
-    socket.emit('updateHosts', hosts);
-
-    socket.on('joinRoom', (roomId) => {
-        socket.join(roomId);
-        socket.to(roomId).emit('userJoined', socket.id);
     });
 
-    socket.on('message', (data) => {
-        io.to('msg-' + data.roomId).emit('newMessage', {
-            userId: socket.id,
-            message: data.message
-        });
-    });
-
-    socket.on('disconnect', () => {
-        // Remove from hosts list if it was a host
-        for (let roomId in hosts) {
-            if (hosts[roomId] === socket.id) {
-                delete hosts[roomId];
-                io.emit('updateHosts', hosts);
-            }
-        }
-        console.log('A user disconnected', socket.id);
-    });
-
-    // Existing WebRTC Signaling
-    socket.on('createOffer', (data) => {
-        socket.to(data.to).emit('offerCreated', {
-            offer: data.offer,
-            from: socket.id
-        });
-    });
-
-    socket.on('createAnswer', (data) => {
-        socket.to(data.to).emit('answerCreated', {
-            answer: data.answer,
-            from: socket.id
-        });
-    });
-
-    socket.on('sendIceCandidate', (data) => {
-        socket.to(data.to).emit('emitCandidateReceived', {
-            candidate: data.candidate
-        });
+    ws.on('error', function error(err) {
+        console.error('WebSocket error:', err);
     });
 });
 

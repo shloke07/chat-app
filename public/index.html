@@ -1,139 +1,65 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>Socket.IO chat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room Test</title>
     <style>
-        body {
-            margin: 0;
-            padding-bottom: 3rem;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-
-        #form {
-            background: rgba(0, 0, 0, 0.15);
-            padding: 0.25rem;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            display: flex;
-            height: 3rem;
-            box-sizing: border-box;
-            backdrop-filter: blur(10px);
-        }
-
-        #input {
-            border: none;
-            padding: 0 1rem;
-            flex-grow: 1;
-            border-radius: 2rem;
-            margin: 0.25rem;
-        }
-
-        #input:focus {
-            outline: none;
-        }
-
-        #form > button {
-            background: #333;
-            border: none;
-            padding: 0 1rem;
-            margin: 0.25rem;
-            border-radius: 3px;
-            outline: none;
-            color: #fff;
-        }
-
-        #messages {
-            list-style-type: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        #messages > li {
-            padding: 0.5rem 1rem;
-        }
-
-        #messages > li:nth-child(odd) {
-            background: #efefef;
-        }
-
-        #hosts {
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid black;
-        }
-
-        .hostItem {
-            margin: 5px 0;
-            cursor: pointer;
-        }
-
-        .hostItem:hover {
-            background-color: #e0e0e0;
-        }
+        #messages { border: 1px solid black; height: 200px; overflow: auto; padding: 5px; }
+        #room { margin-bottom: 10px; }
     </style>
 </head>
-
 <body>
-    <div id="hosts"></div>
-    <ul id="messages"></ul>
-    <form id="form" action="">
-        <input id="input" autocomplete="off" /><button>Send</button>
-    </form>
+    <div>
+        <label for="room">Room Name:</label>
+        <input type="text" id="room" placeholder="Enter Room Name"/>
+        <button id="joinRoom">Join Room</button>
+    </div>
+    <div>
+        <label for="message">Message:</label>
+        <input type="text" id="message" placeholder="Enter your message"/>
+        <button id="sendMessage">Send</button>
+    </div>
+    <div id="messages"></div>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script>
-        var socket = io();
+        let socket;
 
-        var form = document.getElementById('form');
-        var input = document.getElementById('input');
-        var messages = document.getElementById('messages');
-        var hostsDiv = document.getElementById('hosts');
+        document.getElementById('joinRoom').addEventListener('click', function() {
+            const roomName = document.getElementById('room').value;
+            socket = new WebSocket('ws://localhost:8080/chatroom/' + roomName);
 
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (input.value) {
-                socket.emit('chat message', 'user -> ' + input.value)
-                input.value = '';
-            }
-        });
+            socket.onopen = function(e) {
+                console.log("Connected to room: " + roomName);
+            };
 
-        socket.on('updateHosts', (hostList) => {
-            hostsDiv.innerHTML = '<strong>Available Hosts:</strong><br>';
-            for (let roomId in hostList) {
-                let hostItem = document.createElement('div');
-                hostItem.textContent = `Host Room: ${roomId}`;
-                hostItem.classList.add('hostItem');
-                hostItem.addEventListener('click', () => {
-                    socket.emit('joinRoom', roomId);
-                    messages.innerHTML += `<li>Joined room: ${roomId}</li>`;
-                });
-                hostsDiv.appendChild(hostItem);
-            }
+            socket.onmessage = function(event) {
+                let messages = document.getElementById('messages');
+                messages.innerHTML += `<div>${event.data}</div>`;
+            };
 
-            // Button to announce oneself as a host
-            let announceBtn = document.createElement('button');
-            announceBtn.textContent = "Announce as Host";
-            announceBtn.onclick = function () {
-                let roomId = prompt("Enter your Room ID:");
-                if (roomId) {
-                    socket.emit('announceHost', roomId);
+            socket.onclose = function(event) {
+                if (event.wasClean) {
+                    console.log(`Connection closed cleanly, code=${event.code}, reason=${event.reason}`);
+                } else {
+                    // e.g. server process killed or network down
+                    console.log('Connection died');
                 }
             };
-            hostsDiv.appendChild(announceBtn);
+
+            socket.onerror = function(error) {
+                console.error(`[error] ${error.message}`);
+            };
         });
 
-        socket.on('message', (msg) => {
-            var item = document.createElement('li');
-            item.textContent = msg.message;
-            console.log(msg.message)
-            messages.appendChild(item);
-            console.log('appended');
-            window.scrollTo(0, document.body.scrollHeight);
+        document.getElementById('sendMessage').addEventListener('click', function() {
+            const message = document.getElementById('message').value;
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(message);
+            } else {
+                console.log("Socket not connected");
+            }
         });
     </script>
 </body>
-
 </html>
