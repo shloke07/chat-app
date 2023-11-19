@@ -37,43 +37,42 @@ const db = mysql.createPool({
 
 let hosts = {};
 
-// Timer to refresh database values every 5 seconds
+// Timer to refresh database values every 20 seconds
 setInterval(() => {
     db.query('SELECT * FROM conference WHERE endTime is null', (error, results) => {
         if (error) {
             console.error('Error fetching data: ', error);
             return;
         }
-        // Update hosts object
         let updatedHosts = {};
         results.forEach(row => {
             updatedHosts[row.roomId] = {
-                id: row.hostId,
+                roomId: row.roomId,
+                id: row.hostUserId,
                 startTime: row.startTime,
                 endTime: row.endTime
             };
         });
-        // Check if the hosts object has changed
-        // if (JSON.stringify(hosts) !== JSON.stringify(updatedHosts)) {
-            hosts = updatedHosts;
-            io.emit('updateHosts', hosts);
-            console.log('Hosts updated:', hosts);
-        // }
+        hosts = updatedHosts;
+        io.emit('updateHosts', hosts);
+        console.log('Hosts updated:', hosts);
     });
-}, 5000);
+}, 20000);
 
 server.on('upgrade', function upgrade(request, socket, head) {
     const pathname = url.parse(request.url).pathname;
 
-    // Handle WebSocket upgrade
-    if (pathname.startsWith('/chatroom/')) {
+    if (pathname === '/hosts/') {
+        wss.handleUpgrade(request, socket, head, function done(ws) {
+            ws.send(JSON.stringify(hosts));
+        });
+    } else if (pathname.startsWith('/chatroom/')) {
         const roomName = pathname.split('/')[2];
 
         wss.handleUpgrade(request, socket, head, function done(ws) {
-            // ws.username = username; // Attach username to WebSocket object
             let username = 'User' + Date.now() + Math.floor(Math.random() * 1000);
-            ws.username = username
-            ws.room = roomName; // Attach room name to WebSocket object
+            ws.username = username;
+            ws.room = roomName;
 
             if (!rooms[roomName]) {
                 rooms[roomName] = new Map();
@@ -95,7 +94,7 @@ wss.on('connection', function connection(ws) {
         const room = ws.room;
         if (rooms[room]) {
             rooms[room].forEach((username, client) => {
-                if (client.readyState === WebSocket.OPEN) {
+                if (client !== ws && client.readyState === WebSocket.OPEN) {
                     client.send(`${ws.username}: ${message}`);
                 }
             });
@@ -119,28 +118,24 @@ const generateOTP = () => {
     return Math.floor(1000 + Math.random() * 9000); // 4-digit number
 };
 
-//OTP generator API
+// OTP generator API
 app.post('/otp-generate', (req, res) => {
     const { phoneNumber } = req.body;
-    // console.log(phoneNumber)
     const phoneNumberPattern = /^\d{10}$/;
     if (!phoneNumber) {
         return res.status(400).send({ success: false, message: 'Mobile number is required' });
     }
     if (!phoneNumberPattern.test(phoneNumber)) {
         return res.status(400).send({ success: false, message: 'Enter a valid mobile number' });
-
     }
 
     const otp = generateOTP();
-
-    res.status(200).send({ success: true, message: `Your one time password is generated.`, otp: otp })
+    res.status(200).send({ success: true, message: `Your one time password is generated.`, otp: otp });
 });
 
-//User registration API
+// User registration API
 app.post('/user-registration', (req, res) => {
-    const { email, userName, userProfilePic, phoneNumber, address,
-        androidId, fcmToken, dateOfBirth } = req.body;
+    const { email, userName, userProfilePic, phoneNumber, address, androidId, fcmToken, dateOfBirth } = req.body;
     const query = 'SELECT * from user WHERE email = ? OR phoneNumber = ?';
     db.query(query, [email, phoneNumber], (error, results) => {
         if (error) {
@@ -151,8 +146,7 @@ app.post('/user-registration', (req, res) => {
             return res.status(400).send({ success: false, message: 'User already exists, redirecting to login page' });
         }
         const newUser = {
-            email, userName, userProfilePic, phoneNumber, address,
-            androidId, fcmToken, dateOfBirth, userStatus: 0, isUserBlocked: false
+            email, userName, userProfilePic, phoneNumber, address, androidId, fcmToken, dateOfBirth, userStatus: 0, isUserBlocked: false
         };
 
         db.query('INSERT INTO user SET ?', newUser, (error, results) => {
@@ -161,13 +155,12 @@ app.post('/user-registration', (req, res) => {
             }
 
             newUser['userId'] = results.insertId;
-            return res.status(200).send({ success: true, message: 'User registered successfully', user: { newUser } })
+            return res.status(200).send({ success: true, message: 'User registered successfully', user: { newUser } });
         });
     });
-
 });
 
-//User login API
+// User login API
 app.post('/user-login', (req, res) => {
     const { email, phoneNumber } = req.body;
     const query = 'SELECT * FROM user WHERE email = ? OR phoneNumber = ?';
@@ -178,15 +171,11 @@ app.post('/user-login', (req, res) => {
 
         if (results.length) {
             return res.status(200).send({ isUserRegistered: true, success: true, message: 'Logging in', user: results[0] });
-        }
-        else {
+        } else {
             return res.status(200).send({ isUserRegistered: false, success: false, message: 'User does not exist' });
         }
     })
 })
-
-
-
 
 const port = process.env.PORT || 3000;
 
@@ -194,6 +183,4 @@ app.get('/', (req, res) => {
     res.send("Server is running!");
 });
 
-
-server.listen(port,
-    () => console.log(`Server Started on port ${port}...`)).setMaxListeners(10);
+server.listen(port, () => console.log(`Server Started on port ${port}...`)).setMaxListeners(10);

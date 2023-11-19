@@ -1,44 +1,88 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Room Test</title>
     <style>
-        #messages { border: 1px solid black; height: 200px; overflow: auto; padding: 5px; }
-        #room { margin-bottom: 10px; }
+        #messages {
+            border: 1px solid black;
+            height: 200px;
+            overflow: auto;
+            padding: 5px;
+        }
+
+        #room {
+            margin-bottom: 10px;
+        }
     </style>
 </head>
+
 <body>
     <div>
         <label for="room">Room Name:</label>
-        <input type="text" id="room" placeholder="Enter Room Name"/>
+        <input type="text" id="room" placeholder="Enter Room Name" />
         <button id="joinRoom">Join Room</button>
     </div>
     <div>
         <label for="message">Message:</label>
-        <input type="text" id="message" placeholder="Enter your message"/>
+        <input type="text" id="message" placeholder="Enter your message" />
         <button id="sendMessage">Send</button>
     </div>
-    <div id="messages"></div>
+
+    <div>
+        <label for="hostData">Hosts</label>
+        <button></button>
+
+    </div>
+    <div id="hostList">
+
+    </div>
 
     <script>
         let socket;
 
-        document.getElementById('joinRoom').addEventListener('click', function() {
+
+
+        // Function to update the host list
+        function updateHostList(hosts) {
+            const hostList = document.getElementById('hostList');
+            hostList.childNodes.innerHTML = ''; // Clear existing list
+
+            for (const roomId in hosts) {
+                const host = hosts[roomId];
+                const listItem = document.createElement('li');
+                listItem.textContent = `Room: ${host.roomId}, Host: ${host.id}, Start: ${host.startTime}`;
+                hostList.appendChild(listItem);
+            }
+        }
+
+        // Connect to the server via Socket.IO (assuming it's on the same host and port
+
+
+
+        document.getElementById('joinRoom').addEventListener('click', function () {
+            
             const roomName = document.getElementById('room').value;
             socket = new WebSocket('ws://localhost:3000/chatroom/' + roomName);
 
-            socket.onopen = function(e) {
+            socket.onopen = function (e) {
                 console.log("Connected to room: " + roomName);
             };
 
-            socket.onmessage = function(event) {
+            // Listen for 'updateHosts' event from the server
+            socket.on('updateHosts', function (receivedHosts) {
+                console.log('hosts updated success');
+                updateHostList(receivedHosts);
+            });
+
+            socket.onmessage = function (event) {
                 let messages = document.getElementById('messages');
                 messages.innerHTML += `<div>${event.data}</div>`;
             };
 
-            socket.onclose = function(event) {
+            socket.onclose = function (event) {
                 if (event.wasClean) {
                     console.log(`Connection closed cleanly, code=${event.code}, reason=${event.reason}`);
                 } else {
@@ -47,12 +91,12 @@
                 }
             };
 
-            socket.onerror = function(error) {
+            socket.onerror = function (error) {
                 console.error(`[error] ${error.message}`);
             };
         });
 
-        document.getElementById('sendMessage').addEventListener('click', function() {
+        document.getElementById('sendMessage').addEventListener('click', function () {
             const message = document.getElementById('message').value;
             if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(message);
@@ -60,6 +104,67 @@
                 console.log("Socket not connected");
             }
         });
+    </script>
+</body>
+
+</html> -->
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room Test</title>
+    <style>
+        /* #messages {
+            border: 1px solid black;
+            height: 200px;
+            overflow: auto;
+            padding: 5px;
+        } */
+
+        #hostList {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="hostList">Loading hosts...</div>
+
+    <script>
+        let socket = new WebSocket('ws://localhost:3000/hosts/');
+
+        socket.onmessage = function(event) {
+            const hosts = JSON.parse(event.data);
+            updateHostList(hosts);
+        };
+
+        function updateHostList(hosts) {
+            const hostList = document.getElementById('hostList');
+            hostList.innerHTML = ''; // Clear existing hosts
+
+            for (const roomId in hosts) {
+                const host = hosts[roomId];
+                const hostDiv = document.createElement('div');
+                hostDiv.innerHTML = `
+                    <p>Room: ${host.roomId}, Host: ${host.id}, Start: ${host.startTime}</p>
+                    <button onclick="joinRoom('${host.roomId}')">Join</button>
+                `;
+                hostList.appendChild(hostDiv);
+            }
+        }
+
+        function joinRoom(roomId) {
+            window.location.href = `chat.html?roomId=${roomId}`;
+        }
     </script>
 </body>
 </html>
