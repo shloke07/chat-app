@@ -179,8 +179,8 @@ app.post('/user-login', (req, res) => {
 
 const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => {
-    res.send("Server is running!");
-});
+// app.get('/', (req, res) => {
+//     res.send("Server is running!");
+// });
 
 server.listen(port, () => console.log(`Server Started on port ${port}...`)).setMaxListeners(10);
