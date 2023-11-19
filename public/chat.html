@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Room</title>
+    <style>
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 10px;
+            height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <input type="text" id="messageInput" placeholder="Type a message...">
+    <button id="sendMessage">Send</button>
+    <div id="messages"></div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('roomId');
+        let socket;
+
+        if (roomId) {
+            socket = new WebSocket(`ws://localhost:3000/chatroom/${roomId}`);
+
+            socket.onopen = function() {
+                console.log(`Connected to room: ${roomId}`);
+            };
+
+            socket.onmessage = function(event) {
+                console.log(`New message received: ${event.data}`);
+                appendMessage(event.data);
+            };
+
+            socket.onclose = function(event) {
+                console.log('Connection closed');
+            };
+
+            socket.onerror = function(error) {
+                console.error(`WebSocket error: ${error.message}`);
+            };
+
+            document.getElementById('sendMessage').addEventListener('click', function () {
+                const messageInput = document.getElementById('messageInput');
+                const message = messageInput.value.trim();
+                if (message && socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(message);
+                    console.log(`Sent message: ${message}`);
+                    appendMessage(`You: ${message}`); // Show your own message
+                    messageInput.value = ''; // Clear the input field
+                } else {
+                    console.log("Socket not connected or message is empty");
+                }
+            });
+        }
+
+        function appendMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messagesDiv.appendChild(messageElement);
+
+            // Scroll to the bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>
